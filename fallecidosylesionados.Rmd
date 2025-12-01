@@ -1,0 +1,434 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+Nombre: Brndon René Portillo González
+Proyecto: Fase I
+
+Se cargan algunas de las librerías para iniciar con la exploración, los datos fueron previamente revisados y se tienen 8 fuentes de excel y 8 es SSPS.
+
+```{r}
+install.packages(c("readxl", "dplyr"))
+library(readxl)
+library(dplyr)
+
+```
+
+```{r}
+ruta <- "C:/Users/Brandon Portillo/Desktop/Nueva carpeta/4to Trimestre/DataMining/ProyectoF1/Fallecidos y lesionados/Excel"
+
+archivos_excel <- list.files(path = ruta, pattern = "\\.xls[x]?$", full.names = TRUE)
+print(archivos_excel)
+```
+Se pueden visualizar las 8 fuentes y a continuación se procede a consolidar las partes. En cada excel algunos tienen 3 hojas pero solo 1 de cada 3 contiene información y todas las fuentes se trata de la Sheet1 la que nos interesa consultar. Además se validó que las columnas se llamaran igual, la llave primaria se llamaba Num_corre, núm_corre y num_corre.Se eliminó la columna area_geo_ocurr ya que solo aparecia en 2 dataset y no contiene mayor segmentación.
+
+```{r}
+lista_datos <- lapply(archivos_excel, function(archivo) {
+  
+  # Leer la hoja "Sheet1" (podés cambiar el nombre si tus archivos tienen otra hoja)
+  df <- read_excel(archivo, sheet = "Sheet1")
+  
+  return(df)
+})
+
+# Combinar todos los dataframes en uno solo
+datos_excel <- bind_rows(lista_datos)
+
+# Verificar resultado
+glimpse(datos_excel)
+```
+Ahora se procede a importar la información de los archivos .sav
+Para ello se instala y se importa la libreria haven
+```{r}
+head(datos_excel)
+```
+
+
+```{r}
+install.packages("haven")   # si no lo tenés
+library(haven)
+```
+
+```{r}
+ruta_spss <- "C:/Users/Brandon Portillo/Desktop/Nueva carpeta/4to Trimestre/DataMining/ProyectoF1/Fallecidos y lesionados/SPSS"
+
+archivos_spss <- list.files(path = ruta_spss, pattern = "\\.sav$", full.names = TRUE)
+print(archivos_spss)
+
+```
+```{r}
+# Leer cada archivo y guardar en una lista
+lista_spss <- lapply(archivos_spss, function(archivo) {
+  df <- read_sav(archivo)
+  return(df)
+})
+```
+
+Se visualiza el contenido de los encabezados
+```{r}
+names(lista_spss[[1]])
+```
+Se visualizan los primeros datos...
+
+```{r}
+
+head(lista_spss[[1]])
+```
+Se consolidan los SSPS
+
+```{r}
+
+nombres_spss <- lapply(archivos_spss, function(archivo) {
+  df <- read_sav(archivo)
+  names(df)
+})
+
+for (i in seq_along(archivos_spss)) {
+  cat("\n Archivo:", basename(archivos_spss[i]), "\n")
+  print(nombres_spss[[i]])
+}
+```
+data_apriori <- datos_consolidados[, c("año_ocu", "mes_ocu","día_ocu","depto_ocu", "sexo_per", "edad_per", "fall_les", "tipo_veh", "modelo_veh","tipo_eve")]
+
+De los archivos SPSS solo se considera el del año 2021 ya que los demás están incompletos porque les faltan muchas variables a todos en diferentes puntos y eso no favorece nuestro proceso de mineria de datos.
+```{r}
+
+ruta_archivo <- "C:/Users/Brandon Portillo/Desktop/Nueva carpeta/4to Trimestre/DataMining/ProyectoF1/Fallecidos y lesionados/SPSS/2021-Fallecidos y lesionados.sav"
+
+# Leer el archivo
+fallecidos_2021 <- read_sav(ruta_archivo)
+head(fallecidos_2021)
+
+```
+```{r}
+fallecidos_2021 <- fallecidos_2021 %>%
+  select(-zona_ciudad)
+head(fallecidos_2021)
+```
+
+Ahora se tienen también 25 variables para analizar, se consolidará esta información a los 8 datasets de excel. La columna que se ignoró fue la de zona_ciudad ya que está redundante y no es comun respecto al otro dataset.
+
+Se procede a explorar que columnas coinciden entonces
+```{r}
+columnas_comunes <- intersect(names(datos_excel), names(fallecidos_2021))
+
+length(columnas_comunes)    # cuántas columnas coinciden
+columnas_comunes            # nombres de las columnas comunes
+```
+
+
+```{r}
+datos_excel_comunes <- datos_excel[, columnas_comunes, drop = FALSE]
+fallecidos_2021_comunes <- fallecidos_2021[, columnas_comunes, drop = FALSE]
+
+# Se unen datasets
+datos_consolidados <- bind_rows(datos_excel_comunes, fallecidos_2021_comunes)
+head(datos_consolidados)
+dim(datos_consolidados)
+```
+
+Se procede a trabajar con los primeros modelos para analisis de los datos integrando la información de accidentes de transito de los años 2015 a 2023 respectivamente lo que corresponde a 9 años de registros históricos reportados por la PNC.
+
+Acontinuación se procede a encontrar patrones mediante APRIORI
+
+
+```{r}
+
+library(arules)
+#Se utilizan solo 10 columnas de las 25.
+
+data_apriori <- datos_consolidados[, c("año_ocu", "mes_ocu","día_ocu","depto_ocu", "sexo_per", "edad_per", "fall_les", "tipo_veh", "modelo_veh","tipo_eve")]
+#Se eliminan los valores desconocidos para validar los patrones sin ruido en las reglas
+
+data_apriori <- subset(data_apriori, fall_les != 9 & tipo_eve != 99 & sexo_per != 9 & edad_per != 999)
+dim(data_apriori)
+
+datos_trans <- as(data_apriori, "transactions")
+reglas_generales <- apriori(datos_trans, parameter = list(support=0.2, confidence = 0.5)) 
+```
+```{r}
+length(reglas_generales)
+```
+
+```{r}
+# De las 764 reglas de todo el dataset tenemos ya las 75 mas sobresalientes determinando que segun lift mayor que 1 contienen más correlacion con los hechos de transito.
+
+reglas_ordenadas <- sort(reglas_generales, by = "lift", decreasing = TRUE)
+inspect(head(reglas_ordenadas, 75))
+```                           
+El primer patron que se aprecia es que no hay segmentación por sexo ya que tanto hombres como mujeres tienen las mismas probabilidades de ser victimas de un accidente de transito donde queden lesionados o pierdan la vida. 
+
+Otro hecho que no sucede que no hay reglas fuertes que implequen accidentes o lesiones para el tipo de evento de caidas, por ende se observa que si los tipos de evento son colisiones choques o vuelcos entonces hay mayor probilidad de lesion o fallecimiento.
+
+```{r}
+install.packages("arulesViz")
+library(arulesViz)
+
+```
+
+```{r}
+
+# Se grafica la dispersión soporte vs confianza.
+plot(reglas_generales, measure = c("support", "confidence"), shading = "lift")
+
+# Visualizando las 30 reglas mas importantes.
+plot(head(sort(reglas_generales, by="lift"), 30), method = "graph", control = list(type="items"))
+```
+
+```{r}
+data_apriori_gua <- subset(
+  data_apriori,
+  fall_les != 9 & tipo_eve != 99 & sexo_per != 9 & edad_per != 999 & depto_ocu == 1
+)
+datos_filtrados_gua <- data_apriori_gua[, -c(4,7,9)]
+# Calcular número de valores únicos por columna
+num_valores_unicos <- sapply(datos_filtrados_gua, function(x) length(unique(x)))
+
+# Imprimir de forma legible
+for (col in names(num_valores_unicos)) {
+  cat(col, ":", num_valores_unicos[col], "\n")
+}
+
+```
+
+
+```{r}
+
+datos_trans_gua <- as(datos_filtrados_gua, "transactions")
+
+reglas_gua <- apriori(datos_trans_gua, parameter = list(support=0.2, confidence = 0.5)) 
+inspect(reglas_gua[0:94])
+
+```
+
+```{r}
+
+data_fp <- datos_consolidados[, c("año_ocu", "mes_ocu","día_ocu","depto_ocu", "sexo_per", "edad_per", "fall_les", "tipo_veh","tipo_eve")]
+#Se eliminan los valores desconocidos para validar los patrones sin ruido en las reglas
+
+data_fp <- subset(data_fp, fall_les != 9 & tipo_eve != 99 & sexo_per != 9 & edad_per != 999)
+data_fp_gua <- subset(
+  data_fp,
+  fall_les != 9 & tipo_eve != 99 & sexo_per != 9 & edad_per != 999 & depto_ocu == 1
+)
+datos_fp_gua <- data_fp_gua[, -4]
+
+datos_trans_fp_gua <- as(datos_fp_gua, "transactions")
+
+
+reglas_fp_gua <- fim4r(datos_trans_fp_gua, method="fpgrowth", target ="rules", supp =.2, conf=.5)
+
+rf <- as(reglas_fp_gua, "data.frame")
+rf
+```
+```{r}
+data_fp <- datos_consolidados[, c("año_ocu", "mes_ocu","día_ocu","depto_ocu", "sexo_per", "edad_per", "fall_les", "tipo_veh","tipo_eve")]
+#Se eliminan los valores desconocidos para validar los patrones sin ruido en las reglas
+
+data_fp <- subset(data_fp, fall_les != 9 & tipo_eve != 99 & sexo_per != 9 & edad_per != 999)
+data_fp_gua_fall <- subset(
+  data_fp,
+  fall_les != 9 & tipo_eve != 99 & sexo_per != 9 & edad_per != 999 & depto_ocu == 1 & fall_les==2
+)
+datos_fp_gua_fall <- data_fp_gua_fall[, -c(4,7)]
+
+datos_trans_fp_gua_fall <- as(datos_fp_gua_fall, "transactions")
+
+
+reglas_fp_gua_fall <- fim4r(datos_trans_fp_gua_fall, method="fpgrowth", target ="rules", supp =.2, conf=.5)
+
+rf_fall <- as(reglas_fp_gua_fall, "data.frame")
+rf_fall
+```
+
+
+Finalmente procedemos a aplicar K-Means para encontrar clusters en los datos que estamos analizando.Antes de se normalizan las variables ya que hay algunas que por escala pesan mas.
+
+```{r}
+
+library(ggplot2)
+
+data_fp <- datos_consolidados[, c("año_ocu", "mes_ocu","día_ocu","depto_ocu", "sexo_per", "edad_per", "fall_les", "tipo_veh","tipo_eve")]
+#Se eliminan los valores desconocidos para validar los patrones sin ruido en las reglas
+
+data_fp <- subset(data_fp, fall_les != 9 & tipo_eve != 99 & sexo_per != 9 & tipo_veh!=99 & edad_per != 999)
+data_fp_gua <- subset(
+  data_fp,
+  fall_les != 9 & tipo_eve != 99 & sexo_per != 9 & edad_per != 999 & depto_ocu == 1
+)
+data_fp_gua <- data_fp_gua[, -4]
+
+
+data_fp_scaled <- scale(data_fp_gua)
+
+wss <- vector()
+for (k in 1:10) {
+  kmeans_model <- kmeans(data_fp_scaled, centers = k, nstart = 25)
+  wss[k] <- kmeans_model$tot.withinss
+}
+
+plot(1:10, wss, type="b", pch=19, frame=FALSE,
+     xlab="Número de clusters K",
+     ylab="Suma de cuadrados intra-cluster (WSS)",
+     main="Método del Codo")
+
+
+```
+
+se pueden ver 5 clusters 
+
+
+```{r}
+
+cluster <- kmeans(data_fp_gua, centers = 4)
+ggplot(data_fp_gua, aes(x = edad_per, y = tipo_eve, color = as.factor(cluster$cluster))) +
+  geom_point() +
+  geom_point(data = as.data.frame(cluster$centers),
+             aes(x = edad_per, y = tipo_eve),
+             color = "black", size = 4, shape = 17) +
+  labs(title = "Vic Edad vs tipo evento") +
+  theme_minimal()
+
+
+```
+
+```{r}
+cluster <- kmeans(data_fp_gua, centers = 4)
+ggplot(data_fp_gua, aes(x = edad_per, y = fall_les, color = as.factor(cluster$cluster))) +
+  geom_point() +
+  geom_point(data = as.data.frame(cluster$centers),
+             aes(x = edad_per, y = fall_les),
+             color = "black", size = 4, shape = 17) +
+  labs(title = "Edad vs fall_les") +
+  theme_minimal()
+```
+
+
+```{r}
+cluster <- kmeans(data_fp_gua, centers = 4)
+ggplot(data_fp_gua, aes(x = fall_les, y = tipo_veh, color = as.factor(cluster$cluster))) +
+  geom_point() +
+  geom_point(data = as.data.frame(cluster$centers),
+             aes(x = fall_les, y = tipo_veh),
+             color = "black", size = 4, shape = 17) +
+  labs(title = "fall_les vs tipo_veh") +
+  theme_minimal()
+```
+```{r}
+cluster <- kmeans(data_fp_gua, centers = 4)
+ggplot(data_fp_gua, aes(x = edad_per, y = tipo_veh, color = as.factor(cluster$cluster))) +
+  geom_point() +
+  geom_point(data = as.data.frame(cluster$centers),
+             aes(x = edad_per, y = tipo_veh),
+             color = "black", size = 4, shape = 17) +
+  labs(title = "Edad vs tipo vehiculo") +
+  theme_minimal()
+```
+```{r}
+cluster <- kmeans(data_fp_gua, centers = 4)
+ggplot(data_fp_gua, aes(x = tipo_veh, y = tipo_eve, color = as.factor(cluster$cluster))) +
+  geom_point() +
+  geom_point(data = as.data.frame(cluster$centers),
+             aes(x = tipo_veh, y = tipo_eve),
+             color = "black", size = 4, shape = 17) +
+  labs(title = "tipo_veh vs tipo_eve") +
+  theme_minimal()
+```
+
+```{r}
+cluster <- kmeans(data_fp_gua, centers = 4)
+ggplot(data_fp_gua, aes(x = mes_ocu, y = tipo_veh, color = as.factor(cluster$cluster))) +
+  geom_point() +
+  geom_point(data = as.data.frame(cluster$centers),
+             aes(x = mes_ocu, y = tipo_veh),
+             color = "black", size = 4, shape = 17) +
+  labs(title = "Mes vs Tipo vehiculo") +
+  theme_minimal()
+```
+
+```{r}
+set.seed(123)
+kmeans_final <- kmeans(data_fp_scaled, centers = 4, nstart = 25)
+```
+```{r}
+data_fp_gua_cluster <- data_fp_gua %>%
+  mutate(cluster = kmeans_final$cluster)
+```
+
+
+```{r}
+ggplot(data_fp_gua_cluster, aes(x = tipo_eve, fill = as.factor(fall_les))) +
+  geom_bar(position = "fill") +
+  labs(
+    title = "Gravedad del accidente según tipo de evento",
+    x = "Tipo de evento",
+    y = "Proporción",
+    fill = "Fallecido / Lesionado"
+  ) +
+  theme_minimal()
+```
+```{r}
+ggplot(data_fp_gua_cluster, aes(x = tipo_veh, fill = as.factor(sexo_per))) +
+  geom_bar(position = "fill") +
+  labs(
+    title = "Distribución del sexo según tipo de vehículo",
+    x = "Tipo de vehículo",
+    y = "Proporción",
+    fill = "Sexo"
+  ) +
+  theme_minimal()
+```
+```{r}
+ggplot(data_fp_gua_cluster, aes(x = tipo_eve, fill = as.factor(tipo_veh))) +
+  geom_bar(position = "fill") +
+  labs(
+    title = "Tipo de evento según vehículo involucrado",
+    x = "Tipo de evento",
+    y = "Proporción",
+    fill = "Tipo de vehículo"
+  ) +
+  theme_minimal()
+```
+```{r}
+install.packages("combinat")
+library(dplyr)
+library(ggplot2)
+library(combinat)
+
+data_num <- data_fp_gua %>%
+  mutate(across(everything(), ~ as.numeric(as.factor(.x)))) %>%
+  mutate(cluster = kmeans_final$cluster)
+
+# Se generan todas las combinaciones posibles de pares de variables
+vars <- names(data_num)[!names(data_num) %in% "cluster"]
+pairs <- combn(vars, 2, simplify = FALSE)
+
+# Se calcula la distancia promedio entre centroides por cada par de variables
+distances <- sapply(pairs, function(v) {
+  df <- data_num %>% select(all_of(v), cluster)
+  centroids <- df %>%
+    group_by(cluster) %>%
+    summarise(across(everything(), mean))
+  
+  # Matriz de distancias euclidianas entre los centroides
+  d <- dist(centroids[, -1])
+  
+  mean(as.numeric(d))  # promedio de distancias
+})
+
+#Ordenar las combinaciones según la mejor separación
+ranked_pairs <- tibble(
+  var1 = sapply(pairs, `[`, 1),
+  var2 = sapply(pairs, `[`, 2),
+  mean_centroid_distance = distances
+) %>%
+  arrange(desc(mean_centroid_distance))
+
+print(ranked_pairs)
+
+
+```
+
+
