@@ -5,7 +5,7 @@ output: html_notebook
 
 
 Nombre: Brndon René Portillo González
-Proyecto: Fase I
+Proyecto: Fase II
 
 Se cargan algunas de las librerías para iniciar con la exploración, los datos fueron previamente revisados y se tienen 8 fuentes de excel y 8 es SSPS.
 
@@ -13,11 +13,16 @@ Se cargan algunas de las librerías para iniciar con la exploración, los datos 
 install.packages(c("readxl", "dplyr"))
 library(readxl)
 library(dplyr)
+```
 
+## Se installan las librerias para arboles de decision
+```{r}
+install.packages("rpart")
+install.packages("rpart.plot")
 ```
 
 ```{r}
-ruta <- "C:/Users/Brandon Portillo/Desktop/Nueva carpeta/4to Trimestre/DataMining/ProyectoF1/Fallecidos y lesionados/Excel"
+ruta <- "C:/Users/Brandon Portillo/Desktop/Nueva carpeta/4to Trimestre/PFinalF2/Fallecidos y lesionados/Excel"
 
 archivos_excel <- list.files(path = ruta, pattern = "\\.xls[x]?$", full.names = TRUE)
 print(archivos_excel)
@@ -42,17 +47,7 @@ glimpse(datos_excel)
 Ahora se procede a importar la información de los archivos .sav
 Para ello se instala y se importa la libreria haven
 ```{r}
-head(datos_excel)
-```
-
-
-```{r}
-install.packages("haven")   # si no lo tenés
-library(haven)
-```
-
-```{r}
-ruta_spss <- "C:/Users/Brandon Portillo/Desktop/Nueva carpeta/4to Trimestre/DataMining/ProyectoF1/Fallecidos y lesionados/SPSS"
+ruta_spss <- "C:/Users/Brandon Portillo/Desktop/Nueva carpeta/4to Trimestre/PFinalF2/Fallecidos y lesionados/SPSS"
 
 archivos_spss <- list.files(path = ruta_spss, pattern = "\\.sav$", full.names = TRUE)
 print(archivos_spss)
@@ -90,12 +85,12 @@ for (i in seq_along(archivos_spss)) {
   print(nombres_spss[[i]])
 }
 ```
-data_apriori <- datos_consolidados[, c("año_ocu", "mes_ocu","día_ocu","depto_ocu", "sexo_per", "edad_per", "fall_les", "tipo_veh", "modelo_veh","tipo_eve")]
+
 
 De los archivos SPSS solo se considera el del año 2021 ya que los demás están incompletos porque les faltan muchas variables a todos en diferentes puntos y eso no favorece nuestro proceso de mineria de datos.
 ```{r}
 
-ruta_archivo <- "C:/Users/Brandon Portillo/Desktop/Nueva carpeta/4to Trimestre/DataMining/ProyectoF1/Fallecidos y lesionados/SPSS/2021-Fallecidos y lesionados.sav"
+ruta_archivo <- "C:/Users/Brandon Portillo/Desktop/Nueva carpeta/4to Trimestre/PFinalF2/Fallecidos y lesionados/SPSS/2021-Fallecidos y lesionados.sav"
 
 # Leer el archivo
 fallecidos_2021 <- read_sav(ruta_archivo)
@@ -131,304 +126,236 @@ dim(datos_consolidados)
 
 Se procede a trabajar con los primeros modelos para analisis de los datos integrando la información de accidentes de transito de los años 2015 a 2023 respectivamente lo que corresponde a 9 años de registros históricos reportados por la PNC.
 
-Acontinuación se procede a encontrar patrones mediante APRIORI
+Acontinuación se procede a aplicar los modelos de Arboles de decision...
 
 
 ```{r}
 
-library(arules)
-#Se utilizan solo 10 columnas de las 25.
+library(rpart)
+library(rpart.plot)
 
-data_apriori <- datos_consolidados[, c("año_ocu", "mes_ocu","día_ocu","depto_ocu", "sexo_per", "edad_per", "fall_les", "tipo_veh", "modelo_veh","tipo_eve")]
-#Se eliminan los valores desconocidos para validar los patrones sin ruido en las reglas
-
-data_apriori <- subset(data_apriori, fall_les != 9 & tipo_eve != 99 & sexo_per != 9 & edad_per != 999)
-dim(data_apriori)
-
-datos_trans <- as(data_apriori, "transactions")
-reglas_generales <- apriori(datos_trans, parameter = list(support=0.2, confidence = 0.5)) 
-```
-```{r}
-length(reglas_generales)
-```
-
-```{r}
-# De las 764 reglas de todo el dataset tenemos ya las 75 mas sobresalientes determinando que segun lift mayor que 1 contienen más correlacion con los hechos de transito.
-
-reglas_ordenadas <- sort(reglas_generales, by = "lift", decreasing = TRUE)
-inspect(head(reglas_ordenadas, 75))
-```                           
-El primer patron que se aprecia es que no hay segmentación por sexo ya que tanto hombres como mujeres tienen las mismas probabilidades de ser victimas de un accidente de transito donde queden lesionados o pierdan la vida. 
-
-Otro hecho que no sucede que no hay reglas fuertes que implequen accidentes o lesiones para el tipo de evento de caidas, por ende se observa que si los tipos de evento son colisiones choques o vuelcos entonces hay mayor probilidad de lesion o fallecimiento.
-
-```{r}
-install.packages("arulesViz")
-library(arulesViz)
-
-```
-
-```{r}
-
-# Se grafica la dispersión soporte vs confianza.
-plot(reglas_generales, measure = c("support", "confidence"), shading = "lift")
-
-# Visualizando las 30 reglas mas importantes.
-plot(head(sort(reglas_generales, by="lift"), 30), method = "graph", control = list(type="items"))
-```
-
-```{r}
-data_apriori_gua <- subset(
-  data_apriori,
-  fall_les != 9 & tipo_eve != 99 & sexo_per != 9 & edad_per != 999 & depto_ocu == 1
-)
-datos_filtrados_gua <- data_apriori_gua[, -c(4,7,9)]
-# Calcular número de valores únicos por columna
-num_valores_unicos <- sapply(datos_filtrados_gua, function(x) length(unique(x)))
-
-# Imprimir de forma legible
-for (col in names(num_valores_unicos)) {
-  cat(col, ":", num_valores_unicos[col], "\n")
-}
-
-```
-
-
-```{r}
-
-datos_trans_gua <- as(datos_filtrados_gua, "transactions")
-
-reglas_gua <- apriori(datos_trans_gua, parameter = list(support=0.2, confidence = 0.5)) 
-inspect(reglas_gua[0:94])
-
-```
-
-```{r}
-
-data_fp <- datos_consolidados[, c("año_ocu", "mes_ocu","día_ocu","depto_ocu", "sexo_per", "edad_per", "fall_les", "tipo_veh","tipo_eve")]
-#Se eliminan los valores desconocidos para validar los patrones sin ruido en las reglas
-
-data_fp <- subset(data_fp, fall_les != 9 & tipo_eve != 99 & sexo_per != 9 & edad_per != 999)
-data_fp_gua <- subset(
-  data_fp,
-  fall_les != 9 & tipo_eve != 99 & sexo_per != 9 & edad_per != 999 & depto_ocu == 1
-)
-datos_fp_gua <- data_fp_gua[, -4]
-
-datos_trans_fp_gua <- as(datos_fp_gua, "transactions")
-
-
-reglas_fp_gua <- fim4r(datos_trans_fp_gua, method="fpgrowth", target ="rules", supp =.2, conf=.5)
-
-rf <- as(reglas_fp_gua, "data.frame")
-rf
-```
-```{r}
-data_fp <- datos_consolidados[, c("año_ocu", "mes_ocu","día_ocu","depto_ocu", "sexo_per", "edad_per", "fall_les", "tipo_veh","tipo_eve")]
-#Se eliminan los valores desconocidos para validar los patrones sin ruido en las reglas
-
-data_fp <- subset(data_fp, fall_les != 9 & tipo_eve != 99 & sexo_per != 9 & edad_per != 999)
-data_fp_gua_fall <- subset(
-  data_fp,
-  fall_les != 9 & tipo_eve != 99 & sexo_per != 9 & edad_per != 999 & depto_ocu == 1 & fall_les==2
-)
-datos_fp_gua_fall <- data_fp_gua_fall[, -c(4,7)]
-
-datos_trans_fp_gua_fall <- as(datos_fp_gua_fall, "transactions")
-
-
-reglas_fp_gua_fall <- fim4r(datos_trans_fp_gua_fall, method="fpgrowth", target ="rules", supp =.2, conf=.5)
-
-rf_fall <- as(reglas_fp_gua_fall, "data.frame")
-rf_fall
-```
-
-
-Finalmente procedemos a aplicar K-Means para encontrar clusters en los datos que estamos analizando.Antes de se normalizan las variables ya que hay algunas que por escala pesan mas.
-
-```{r}
-
-library(ggplot2)
-
-data_fp <- datos_consolidados[, c("año_ocu", "mes_ocu","día_ocu","depto_ocu", "sexo_per", "edad_per", "fall_les", "tipo_veh","tipo_eve")]
-#Se eliminan los valores desconocidos para validar los patrones sin ruido en las reglas
-
-data_fp <- subset(data_fp, fall_les != 9 & tipo_eve != 99 & sexo_per != 9 & tipo_veh!=99 & edad_per != 999)
-data_fp_gua <- subset(
-  data_fp,
-  fall_les != 9 & tipo_eve != 99 & sexo_per != 9 & edad_per != 999 & depto_ocu == 1
-)
-data_fp_gua <- data_fp_gua[, -4]
-
-
-data_fp_scaled <- scale(data_fp_gua)
-
-wss <- vector()
-for (k in 1:10) {
-  kmeans_model <- kmeans(data_fp_scaled, centers = k, nstart = 25)
-  wss[k] <- kmeans_model$tot.withinss
-}
-
-plot(1:10, wss, type="b", pch=19, frame=FALSE,
-     xlab="Número de clusters K",
-     ylab="Suma de cuadrados intra-cluster (WSS)",
-     main="Método del Codo")
-
-
-```
-
-se pueden ver 5 clusters 
-
-
-```{r}
-
-cluster <- kmeans(data_fp_gua, centers = 4)
-ggplot(data_fp_gua, aes(x = edad_per, y = tipo_eve, color = as.factor(cluster$cluster))) +
-  geom_point() +
-  geom_point(data = as.data.frame(cluster$centers),
-             aes(x = edad_per, y = tipo_eve),
-             color = "black", size = 4, shape = 17) +
-  labs(title = "Vic Edad vs tipo evento") +
-  theme_minimal()
-
-
-```
-
-```{r}
-cluster <- kmeans(data_fp_gua, centers = 4)
-ggplot(data_fp_gua, aes(x = edad_per, y = fall_les, color = as.factor(cluster$cluster))) +
-  geom_point() +
-  geom_point(data = as.data.frame(cluster$centers),
-             aes(x = edad_per, y = fall_les),
-             color = "black", size = 4, shape = 17) +
-  labs(title = "Edad vs fall_les") +
-  theme_minimal()
-```
-
-
-```{r}
-cluster <- kmeans(data_fp_gua, centers = 4)
-ggplot(data_fp_gua, aes(x = fall_les, y = tipo_veh, color = as.factor(cluster$cluster))) +
-  geom_point() +
-  geom_point(data = as.data.frame(cluster$centers),
-             aes(x = fall_les, y = tipo_veh),
-             color = "black", size = 4, shape = 17) +
-  labs(title = "fall_les vs tipo_veh") +
-  theme_minimal()
-```
-```{r}
-cluster <- kmeans(data_fp_gua, centers = 4)
-ggplot(data_fp_gua, aes(x = edad_per, y = tipo_veh, color = as.factor(cluster$cluster))) +
-  geom_point() +
-  geom_point(data = as.data.frame(cluster$centers),
-             aes(x = edad_per, y = tipo_veh),
-             color = "black", size = 4, shape = 17) +
-  labs(title = "Edad vs tipo vehiculo") +
-  theme_minimal()
-```
-```{r}
-cluster <- kmeans(data_fp_gua, centers = 4)
-ggplot(data_fp_gua, aes(x = tipo_veh, y = tipo_eve, color = as.factor(cluster$cluster))) +
-  geom_point() +
-  geom_point(data = as.data.frame(cluster$centers),
-             aes(x = tipo_veh, y = tipo_eve),
-             color = "black", size = 4, shape = 17) +
-  labs(title = "tipo_veh vs tipo_eve") +
-  theme_minimal()
-```
-
-```{r}
-cluster <- kmeans(data_fp_gua, centers = 4)
-ggplot(data_fp_gua, aes(x = mes_ocu, y = tipo_veh, color = as.factor(cluster$cluster))) +
-  geom_point() +
-  geom_point(data = as.data.frame(cluster$centers),
-             aes(x = mes_ocu, y = tipo_veh),
-             color = "black", size = 4, shape = 17) +
-  labs(title = "Mes vs Tipo vehiculo") +
-  theme_minimal()
-```
-
-```{r}
+datos_consolidados$horario <- ifelse( datos_consolidados$hora_ocu >= 6 &  datos_consolidados$hora_ocu <= 18, 1, 2)
+# 1 es dia y 2 es noche
+# Filtrar y balancear clases
+data_arbol <- datos_consolidados %>%
+  filter(fall_les %in% c(1, 2), sexo_per != 9, tipo_eve != 99, tipo_veh != 99, edad_per != 999)
+#data_bal <- data_arbol
 set.seed(123)
-kmeans_final <- kmeans(data_fp_scaled, centers = 4, nstart = 25)
+fallecidos <- data_arbol %>% filter(fall_les == 1)
+lesionados <- data_arbol %>% filter(fall_les == 2) %>% sample_n(nrow(fallecidos))
+data_bal <- bind_rows(fallecidos, lesionados)
+
+# Convertir variables categóricas a factor
+data_bal$sexo_per <- factor(data_bal$sexo_per)
+data_bal$tipo_eve <- factor(data_bal$tipo_eve)
+data_bal$tipo_veh <- factor(data_bal$tipo_veh)
+data_bal$depto_ocu <- factor(data_bal$depto_ocu)
+data_bal$horario <- factor(data_bal$horario)
+
+```
+
+```{r}
+# Calcular conteos y porcentajes por departamento
+resumen <- data_bal %>%
+  filter(fall_les %in% c(1, 2)) %>%
+  group_by(depto_ocu, fall_les) %>%
+  summarise(casos = n(), .groups = "drop") %>%
+  group_by(depto_ocu) %>%
+  summarise(
+    Fallecido = sum(casos[fall_les == 1], na.rm = TRUE),
+    Lesionado = sum(casos[fall_les == 2], na.rm = TRUE)
+  ) %>%
+  mutate(
+    Total = Fallecido + Lesionado,
+    pct_fallecido = round(Fallecido / Total * 100, 2),
+    pct_lesionado = round(Lesionado / Total * 100, 2)
+  ) %>%
+  arrange(desc(pct_fallecido)) 
+resumen
+```
+
+
+```{r}
+table(data_bal$fall_les)
+```
+
+### Modelo 1: Predecir gravedad (fall_les)
+
+```{r}
+
+# Árbol con más variables y parámetros ajustados
+arbol1 <- rpart(fall_les ~ sexo_per + tipo_eve + tipo_veh + depto_ocu + horario,
+                data = data_bal, method = "class")
+
+rpart.plot(arbol1, type = 2, extra = 0, under = TRUE, fallen.leaves = TRUE,
+           box.palette = "BuGn", main = "Árbol 1: Gravedad del accidente", cex=0.5)
+
 ```
 ```{r}
-data_fp_gua_cluster <- data_fp_gua %>%
-  mutate(cluster = kmeans_final$cluster)
+
+
+#Escenario de prueba
+caso1 <- data.frame(
+  sexo_per = factor(2, levels = levels(data_bal$sexo_per)),   # Mujer
+  tipo_eve = factor(2, levels = levels(data_bal$tipo_eve)),   # Ej. vuelco
+  tipo_veh = factor(2, levels = levels(data_bal$tipo_veh)),   # Ej. motocicleta
+  depto_ocu = factor(2, levels = levels(data_bal$depto_ocu)), # Departamento  depto_ocu = factor(2, levels = levels(data_bal$depto_ocu)), # Departamento interior
+  horario = factor("Día", levels = levels(data_bal$horario))   # Día
+)
+
+# Predicción con probabilidades
+result <- predict(arbol1, caso1, type = "prob")
+result
+```
+
+
+### Modelo 2: Predecir tipo de evento (tipo_eve)
+```{r}
+data_arbol2 <- datos_consolidados %>%
+  filter(fall_les %in% c(1, 2), sexo_per != 9, tipo_eve != 99,tipo_eve!=1, tipo_veh != 99, edad_per != 999)
+data_arbol2$tipo_veh <- factor(data_arbol2$tipo_veh)
+data_arbol2$depto_ocu <- factor(data_arbol2$depto_ocu)
+data_arbol2$horario <- factor(data_arbol2$horario)
+data_arbol2$fall_les <- factor(data_arbol2$fall_les)
+
+table(data_arbol2$tipo_eve)
+table(data_arbol$tipo_eve)
+```
+
+```{r}
+
+
+arbol2 <- rpart(tipo_eve ~  tipo_veh +depto_ocu + fall_les + horario , data = data_arbol2, method = "class")
+rpart.plot(arbol2,type=2,extra=0, under=TRUE,fallen.leaves = TRUE,box.palette = "BuGn", main = "Árbol 2: Tipo de evento", cex=0.5)
+
+```
+```{r}
+# Crear escenario de prueba
+caso2 <- data.frame(
+  tipo_veh = factor(1, levels = levels(data_arbol2$tipo_veh)),
+  depto_ocu = factor(1, levels = levels(data_arbol2$depto_ocu)),
+  horario = factor(1, levels = levels(data_arbol2$horario)),
+  fall_les = factor(1, levels = levels(data_arbol2$fall_les))
+)
+
+# Predicción con probabilidades
+result <- predict(arbol2, caso2, type = "prob")
+result
+```
+### Modelo 3: Predcir tipo de vehiculo
+```{r}
+data_arbol3 <- datos_consolidados %>%
+  filter(fall_les %in% c(1, 2), sexo_per != 9, tipo_eve != 99, tipo_veh != 99,tipo_veh != 4, edad_per != 999)
+data_arbol3$sexo_per <- factor(data_arbol3$sexo_per)
+data_arbol3$tipo_eve <- factor(data_arbol3$tipo_eve)
+data_arbol3$tipo_veh <- factor(data_arbol3$tipo_veh)
+data_arbol3$depto_ocu <- factor(data_arbol3$depto_ocu)
+data_arbol3$zona_ocu <- factor(data_arbol3$zona_ocu)
+data_arbol3$fall_les <- factor(data_arbol3$fall_les)
+data_arbol3$horario <- factor(data_arbol3$horario)
+table(data_arbol3$tipo_veh)
 ```
 
 
 ```{r}
-ggplot(data_fp_gua_cluster, aes(x = tipo_eve, fill = as.factor(fall_les))) +
-  geom_bar(position = "fill") +
-  labs(
-    title = "Gravedad del accidente según tipo de evento",
-    x = "Tipo de evento",
-    y = "Proporción",
-    fill = "Fallecido / Lesionado"
-  ) +
-  theme_minimal()
+
+# Árbol para tipo de vehículo
+arbol3 <- rpart(tipo_veh ~ tipo_eve + sexo_per + depto_ocu + horario + fall_les,
+                data = data_arbol3, method = "class")
+
+
+rpart.plot(arbol3, type = 2, extra = 0, under = TRUE, fallen.leaves = TRUE,
+           box.palette = "BuGn", main = "Árbol 3: Tipo de vehículo", cex = 0.6)
+
 ```
 ```{r}
-ggplot(data_fp_gua_cluster, aes(x = tipo_veh, fill = as.factor(sexo_per))) +
-  geom_bar(position = "fill") +
-  labs(
-    title = "Distribución del sexo según tipo de vehículo",
-    x = "Tipo de vehículo",
-    y = "Proporción",
-    fill = "Sexo"
-  ) +
-  theme_minimal()
+# Crear escenario de prueba
+caso3 <- data.frame(
+  tipo_eve = factor(1, levels = levels(data_arbol3$tipo_eve)),
+  depto_ocu = factor(1, levels = levels(data_arbol3$depto_ocu)),
+  sexo_per = factor(1, levels = levels(data_arbol3$sexo_per)),
+  horario = factor(1, levels = levels(data_arbol3$horario)),
+  fall_les = factor(2, levels = levels(data_arbol3$fall_les))
+)
+
+# Predicción con probabilidades
+result <- predict(arbol3, caso3, type = "prob")
+result
+```
+
+
+### Modelo 4: Predecir horario (día/noche)
+```{r}
+data_arbol4 <- datos_consolidados %>%
+  filter(fall_les %in% c(1, 2), sexo_per != 9, tipo_eve != 99, tipo_veh != 99, edad_per != 999)
+data_arbol4$sexo_per <- factor(data_arbol4$sexo_per)
+data_arbol4$tipo_eve <- factor(data_arbol4$tipo_eve)
+data_arbol4$tipo_veh <- factor(data_arbol4$tipo_veh)
+data_arbol4$depto_ocu <- factor(data_arbol4$depto_ocu)
+data_arbol4$zona_ocu <- factor(data_arbol4$zona_ocu)
+data_arbol4$fall_les <- factor(data_arbol4$fall_les)
+data_arbol4$horario <- factor(data_arbol4$horario)
+table(data_arbol4$horario)
+
+
+```
+
+```{r}
+arbol4 <- rpart(horario ~  tipo_eve +sexo_per + tipo_veh + depto_ocu + fall_les, data = data_arbol4, method = "class")
+
+rpart.plot(arbol4, type = 2, extra = 0, under = TRUE, fallen.leaves = TRUE,
+           box.palette = "BuGn", main = "Árbol 4: Horario", cex = 0.6)
+
 ```
 ```{r}
-ggplot(data_fp_gua_cluster, aes(x = tipo_eve, fill = as.factor(tipo_veh))) +
-  geom_bar(position = "fill") +
-  labs(
-    title = "Tipo de evento según vehículo involucrado",
-    x = "Tipo de evento",
-    y = "Proporción",
-    fill = "Tipo de vehículo"
-  ) +
-  theme_minimal()
+caso4 <- data.frame(
+  tipo_eve = factor(1, levels = levels(data_arbol3$tipo_eve)),
+  tipo_veh = factor(1, levels = levels(data_arbol3$tipo_veh)),
+  depto_ocu = factor(1, levels = levels(data_arbol3$depto_ocu)),
+  sexo_per = factor(1, levels = levels(data_arbol3$sexo_per)),
+  fall_les = factor(2, levels = levels(data_arbol3$fall_les))
+)
+
+# Predicción con probabilidades
+result <- predict(arbol4, caso4, type = "prob")
+result
+```
+### Modelo 5: Predecir sexo (hombre/mujer)
+```{r}
+data_arbol5 <- datos_consolidados %>%
+  filter(fall_les %in% c(1, 2), sexo_per != 9, tipo_eve != 99, tipo_veh != 99, edad_per != 999 )
+
+data_arbol5$sexo_per <- factor(data_arbol5$sexo_per)
+data_arbol5$tipo_eve <- factor(data_arbol5$tipo_eve)
+data_arbol5$tipo_veh <- factor(data_arbol5$tipo_veh)
+data_arbol5$depto_ocu <- factor(data_arbol5$depto_ocu)
+data_arbol5$zona_ocu <- factor(data_arbol5$zona_ocu)
+data_arbol5$fall_les <- factor(data_arbol5$fall_les)
+data_arbol5$horario <- factor(data_arbol5$horario)
+```
+
+```{r}
+# Árbol con más variables y parámetros ajustados
+arbol5 <- rpart(fall_les ~ sexo_per + tipo_eve + tipo_veh + depto_ocu + horario + mes_ocu + mayor_menor + edad_quinquenales,
+                data = data_arbol5, method = "class")
+
+rpart.plot(arbol5, type = 2, extra = 0, under = TRUE, fallen.leaves = TRUE,
+           box.palette = "BuGn", main = "Árbol 1: Gravedad del accidente", cex=0.5)
+```
+
+```{r}
+barplot(arbol1$variable.importance, main="Importancia de variables", col="steelblue")
 ```
 ```{r}
-install.packages("combinat")
-library(dplyr)
-library(ggplot2)
-library(combinat)
-
-data_num <- data_fp_gua %>%
-  mutate(across(everything(), ~ as.numeric(as.factor(.x)))) %>%
-  mutate(cluster = kmeans_final$cluster)
-
-# Se generan todas las combinaciones posibles de pares de variables
-vars <- names(data_num)[!names(data_num) %in% "cluster"]
-pairs <- combn(vars, 2, simplify = FALSE)
-
-# Se calcula la distancia promedio entre centroides por cada par de variables
-distances <- sapply(pairs, function(v) {
-  df <- data_num %>% select(all_of(v), cluster)
-  centroids <- df %>%
-    group_by(cluster) %>%
-    summarise(across(everything(), mean))
-  
-  # Matriz de distancias euclidianas entre los centroides
-  d <- dist(centroids[, -1])
-  
-  mean(as.numeric(d))  # promedio de distancias
-})
-
-#Ordenar las combinaciones según la mejor separación
-ranked_pairs <- tibble(
-  var1 = sapply(pairs, `[`, 1),
-  var2 = sapply(pairs, `[`, 2),
-  mean_centroid_distance = distances
-) %>%
-  arrange(desc(mean_centroid_distance))
-
-print(ranked_pairs)
-
+barplot(arbol2$variable.importance, main="Importancia de variables", col="steelblue")
+```
+```{r}
+barplot(arbol3$variable.importance, main="Importancia de variables", col="steelblue")
+```
+```{r}
+barplot(arbol4$variable.importance, main="Importancia de variables", col="steelblue")
+```
+```{r}
 
 ```
-
 
