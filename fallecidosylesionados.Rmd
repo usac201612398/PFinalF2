@@ -44,6 +44,19 @@ datos_excel <- bind_rows(lista_datos)
 # Verificar resultado
 glimpse(datos_excel)
 ```
+```{r}
+head(datos_excel)
+
+```
+```{r}
+install.packages("haven")
+```
+
+
+```{r}
+library(haven)
+```
+
 Ahora se procede a importar la información de los archivos .sav
 Para ello se instala y se importa la libreria haven
 ```{r}
@@ -320,28 +333,8 @@ caso4 <- data.frame(
 result <- predict(arbol4, caso4, type = "prob")
 result
 ```
-### Modelo 5: Predecir sexo (hombre/mujer)
-```{r}
-data_arbol5 <- datos_consolidados %>%
-  filter(fall_les %in% c(1, 2), sexo_per != 9, tipo_eve != 99, tipo_veh != 99, edad_per != 999 )
+### GRAFICOS DE RELACION ENTRE VARIABLES
 
-data_arbol5$sexo_per <- factor(data_arbol5$sexo_per)
-data_arbol5$tipo_eve <- factor(data_arbol5$tipo_eve)
-data_arbol5$tipo_veh <- factor(data_arbol5$tipo_veh)
-data_arbol5$depto_ocu <- factor(data_arbol5$depto_ocu)
-data_arbol5$zona_ocu <- factor(data_arbol5$zona_ocu)
-data_arbol5$fall_les <- factor(data_arbol5$fall_les)
-data_arbol5$horario <- factor(data_arbol5$horario)
-```
-
-```{r}
-# Árbol con más variables y parámetros ajustados
-arbol5 <- rpart(fall_les ~ sexo_per + tipo_eve + tipo_veh + depto_ocu + horario + mes_ocu + mayor_menor + edad_quinquenales,
-                data = data_arbol5, method = "class")
-
-rpart.plot(arbol5, type = 2, extra = 0, under = TRUE, fallen.leaves = TRUE,
-           box.palette = "BuGn", main = "Árbol 1: Gravedad del accidente", cex=0.5)
-```
 
 ```{r}
 barplot(arbol1$variable.importance, main="Importancia de variables", col="steelblue")
@@ -355,7 +348,434 @@ barplot(arbol3$variable.importance, main="Importancia de variables", col="steelb
 ```{r}
 barplot(arbol4$variable.importance, main="Importancia de variables", col="steelblue")
 ```
+### BOSQUES ALEATORIOS
+
 ```{r}
+
+install.packages("randomForest")
+library(randomForest)
 
 ```
 
+### MODELO 1: PREDECIR CONSECUENCIA (FALL/LES) - SIN BALANCEAR
+
+```{r}
+
+data_rf1 <- datos_consolidados %>%
+  filter(fall_les %in% c(1, 2), sexo_per != 9, tipo_eve != 99, tipo_veh != 99, edad_per != 999)
+
+data_rf1$sexo_per <- factor(data_rf1$sexo_per)
+data_rf1$tipo_eve <- factor(data_rf1$tipo_eve)
+data_rf1$tipo_veh <- factor(data_rf1$tipo_veh)
+data_rf1$depto_ocu <- factor(data_rf1$depto_ocu)
+data_rf1$horario <- factor(data_rf1$horario)
+data_rf1$fall_les <- factor(data_rf1$fall_les)
+
+set.seed(123)
+
+data <-  data_rf1[sample(1:nrow(data_rf1)), ]
+train_index <- sample(1:nrow(data), 0.7 * nrow(data))
+train_data <- data[train_index, ]
+test_data <- data[-train_index, ]
+
+modelo_rf1 <- randomForest(fall_les ~ sexo_per + tipo_eve + tipo_veh + depto_ocu + horario,
+                           data = train_data, ntree = 100, mtry = 4, importance = TRUE)
+
+modelo_rf1
+
+```
+
+```{r}
+plot(modelo_rf1)
+```
+```{r}
+
+predictions <- predict(modelo_rf1, newdata = test_data)
+conf_matrix <- table(test_data$fall_les, predictions)
+conf_matrix
+
+accuracy <- sum(diag(conf_matrix)) / sum(conf_matrix)
+accuracy
+
+```
+```{r}
+
+casorf1 <- data.frame(sexo_per = factor(2, levels = levels(data_rf1$sexo_per)),
+                    tipo_eve = factor(2, levels = levels(data_rf1$tipo_eve)),
+                    tipo_veh = factor(1, levels = levels(data_rf1$tipo_veh)),
+                    depto_ocu = factor(2, levels = levels(data_rf1$depto_ocu)),
+                    horario = factor(1, levels = levels(data_rf1$horario)))
+
+predict(modelo_rf1, casorf1,type="prob")
+predict
+
+```
+### MODELO 1: PREDECIR CONSECUENCIA (FALL/ LES) - BALANCEADO
+
+```{r}
+
+data_rf1b <- datos_consolidados %>%
+  filter(fall_les %in% c(1, 2), sexo_per != 9, tipo_eve != 99, tipo_veh != 99, edad_per != 999)
+data_bal <- data_rf1b
+set.seed(123)
+fallecidos <- data_arbol %>% filter(fall_les == 1)
+lesionados <- data_arbol %>% filter(fall_les == 2) %>% sample_n(nrow(fallecidos))
+data_bal <- bind_rows(fallecidos, lesionados)
+
+# Convertir variables categóricas a factor
+data_bal$sexo_per <- factor(data_bal$sexo_per)
+data_bal$tipo_eve <- factor(data_bal$tipo_eve)
+data_bal$tipo_veh <- factor(data_bal$tipo_veh)
+data_bal$depto_ocu <- factor(data_bal$depto_ocu)
+data_bal$horario <- factor(data_bal$horario)
+data_bal$fall_les <- factor(data_bal$fall_les)
+
+set.seed(123)
+
+data <-  data_bal[sample(1:nrow(data_bal)), ]
+train_index <- sample(1:nrow(data), 0.7 * nrow(data))
+train_data <- data[train_index, ]
+test_data <- data[-train_index, ]
+
+modelo_rf1b <- randomForest(fall_les ~ sexo_per + tipo_eve + tipo_veh + depto_ocu + horario,
+                           data = train_data, ntree = 100, mtry = 4, importance = TRUE)
+
+modelo_rf1b
+
+```
+```{r}
+plot(modelo_rf1b)
+```
+```{r}
+
+predictions <- predict(modelo_rf1b, newdata = test_data)
+conf_matrix <- table(test_data$fall_les, predictions)
+conf_matrix
+
+accuracy <- sum(diag(conf_matrix)) / sum(conf_matrix)
+accuracy
+
+```
+
+```{r}
+
+casorf1b <- data.frame(sexo_per = factor(2, levels = levels(data_bal$sexo_per)),
+                    tipo_eve = factor(2, levels = levels(data_bal$tipo_eve)),
+                    tipo_veh = factor(1, levels = levels(data_bal$tipo_veh)),
+                    depto_ocu = factor(2, levels = levels(data_bal$depto_ocu)),
+                    horario = factor(1, levels = levels(data_bal$horario)))
+
+predict(modelo_rf1b, casorf1b,type="prob")
+predict
+
+```
+### MODELO 2: PREDECIR TIPO DE EVENTO - Excluyendo colisiones
+
+```{r}
+
+# Preparar datos y factores
+data_arbol2$tipo_eve   <- factor(data_arbol2$tipo_eve)
+data_arbol2$tipo_veh   <- factor(data_arbol2$tipo_veh)
+data_arbol2$depto_ocu  <- factor(data_arbol2$depto_ocu)
+data_arbol2$horario    <- factor(data_arbol2$horario)
+data_arbol2$fall_les   <- factor(data_arbol2$fall_les)
+data_arbol2$sexo_per   <- factor(data_arbol2$sexo_per)
+data_arbol2$g_hora_5   <- factor(data_arbol2$g_hora_5)
+
+# Entrenar RF
+set.seed(123)
+data <-  data_arbol2[sample(1:nrow(data_arbol2)), ]
+train_index <- sample(1:nrow(data), 0.7 * nrow(data))
+train_data <- data[train_index, ]
+test_data <- data[-train_index, ]
+modelo_rf2 <- randomForest(tipo_eve ~ tipo_veh + depto_ocu + fall_les + g_hora_5 + sexo_per,
+                           data = train_data, ntree = 50, mtry = 3, importance = TRUE)
+
+
+modelo_rf2
+```
+
+```{r}
+plot(modelo_rf2)
+
+```
+```{r}
+
+predictions <- predict(modelo_rf2, newdata = test_data)
+conf_matrix <- table(test_data$fall_les, predictions)
+conf_matrix
+
+accuracy <- sum(diag(conf_matrix)) / sum(conf_matrix)
+accuracy
+
+```
+```{r}
+
+casorf2 <- data.frame(sexo_per = factor(2, levels = levels(data_arbol2$sexo_per)),
+                    fall_les = factor(2, levels = levels(data_arbol2$fall_les)),
+                    tipo_veh = factor(1, levels = levels(data_arbol2$tipo_veh)),
+                    depto_ocu = factor(2, levels = levels(data_arbol2$depto_ocu)),
+                    g_hora_5 = factor(1, levels = levels(data_arbol2$g_hora_5)))
+
+predict(modelo_rf2, casorf2,type="prob")
+predict
+
+```
+
+### MODELO 2: PREDECIR TIPO DE EVENTO - Incluyendo todos los eventos
+```{r}
+
+data_rf2 <- datos_consolidados %>%
+  filter(fall_les %in% c(1, 2), sexo_per != 9, tipo_eve != 99, tipo_veh != 99, edad_per != 999)
+
+data_rf2$sexo_per <- factor(data_rf2$sexo_per)
+data_rf2$tipo_eve <- factor(data_rf2$tipo_eve)
+data_rf2$tipo_veh <- factor(data_rf2$tipo_veh)
+data_rf2$depto_ocu <- factor(data_rf2$depto_ocu)
+data_rf2$horario <- factor(data_rf2$horario)
+data_rf2$fall_les <- factor(data_rf2$fall_les)
+data_rf2$g_hora_5 <- factor(data_rf2$g_hora_5)
+
+# Entrenar RF
+set.seed(123)
+data <-  data_rf2[sample(1:nrow(data_rf2)), ]
+train_index <- sample(1:nrow(data), 0.7 * nrow(data))
+train_data <- data[train_index, ]
+test_data <- data[-train_index, ]
+modelo_rf2 <- randomForest(tipo_eve ~ tipo_veh + depto_ocu + fall_les + g_hora_5 + sexo_per ,
+                           data = train_data, ntree = 50, mtry = 3, importance = TRUE)
+
+
+modelo_rf2
+```
+```{r}
+plot(modelo_rf2)
+
+```
+```{r}
+
+predictions <- predict(modelo_rf2, newdata = test_data)
+conf_matrix <- table(test_data$fall_les, predictions)
+conf_matrix
+
+accuracy <- sum(diag(conf_matrix)) / sum(conf_matrix)
+accuracy
+
+```
+
+```{r}
+
+casorf2 <- data.frame(sexo_per = factor(2, levels = levels(data$sexo_per)),
+                    fall_les = factor(2, levels = levels(data$fall_les)),
+                    tipo_veh = factor(1, levels = levels(data$tipo_veh)),
+                    depto_ocu = factor(2, levels = levels(data$depto_ocu)),
+                    g_hora_5 = factor(1, levels = levels(data$g_hora_5)))
+
+predict(modelo_rf2, casorf2,type="prob")
+predict
+
+```
+### MODELO 3: PREDICCION DE TIPO DE VEHICULO
+
+```{r}
+
+# Preparar datos y factores
+data_arbol3$tipo_veh   <- factor(data_arbol3$tipo_veh)
+data_arbol3$tipo_eve   <- factor(data_arbol3$tipo_eve)
+data_arbol3$sexo_per   <- factor(data_arbol3$sexo_per)
+data_arbol3$depto_ocu  <- factor(data_arbol3$depto_ocu)
+data_arbol3$horario    <- factor(data_arbol3$horario)
+data_arbol3$fall_les   <- factor(data_arbol3$fall_les)
+data_arbol3$g_hora_5   <- factor(data_arbol3$g_hora_5)
+
+# Entrenar RF
+set.seed(123)
+
+data <-  data_arbol3[sample(1:nrow(data_arbol3)), ]
+train_index <- sample(1:nrow(data), 0.7 * nrow(data))
+train_data <- data[train_index, ]
+test_data <- data[-train_index, ]
+
+modelo_rf3 <- randomForest(tipo_veh ~ tipo_eve + sexo_per + depto_ocu + g_hora_5 + fall_les,
+                           data = train_data, ntree = 100, mtry = 4, importance = TRUE)
+modelo_rf3
+
+```
+```{r}
+plot(modelo_rf3)
+```
+```{r}
+
+predictions <- predict(modelo_rf3, newdata = test_data)
+conf_matrix <- table(test_data$fall_les, predictions)
+conf_matrix
+
+accuracy <- sum(diag(conf_matrix)) / sum(conf_matrix)
+accuracy
+
+```
+```{r}
+
+casorf3 <- data.frame(sexo_per = factor(2, levels = levels(data$sexo_per)),
+                    fall_les = factor(2, levels = levels(data$fall_les)),
+                    tipo_eve = factor(1, levels = levels(data$tipo_eve)),
+                    depto_ocu = factor(2, levels = levels(data$depto_ocu)),
+                    g_hora_5 = factor(1, levels = levels(data$g_hora_5)))
+
+predict(modelo_rf3, casorf3,type="prob")
+predict
+
+```
+
+```{r}
+
+# Preparar datos y factores
+data_arbol4$tipo_veh   <- factor(data_arbol4$tipo_veh)
+data_arbol4$tipo_eve   <- factor(data_arbol4$tipo_eve)
+data_arbol4$sexo_per   <- factor(data_arbol4$sexo_per)
+data_arbol4$depto_ocu  <- factor(data_arbol4$depto_ocu)
+data_arbol4$horario    <- factor(data_arbol4$horario)
+data_arbol4$fall_les   <- factor(data_arbol4$fall_les)
+
+# Entrenar RF
+set.seed(123)
+
+data <-  data_arbol4[sample(1:nrow(data_arbol4)), ]
+train_index <- sample(1:nrow(data), 0.7 * nrow(data))
+train_data <- data[train_index, ]
+test_data <- data[-train_index, ]
+
+modelo_rf4 <- randomForest(horario ~ tipo_eve + sexo_per + depto_ocu + tipo_veh + fall_les,
+                           data = train_data, ntree = 100, mtry = 4, importance = TRUE)
+modelo_rf4
+
+```
+```{r}
+plot(modelo_rf4)
+
+```
+```{r}
+
+predictions <- predict(modelo_rf4, newdata = test_data)
+conf_matrix <- table(test_data$fall_les, predictions)
+conf_matrix
+
+accuracy <- sum(diag(conf_matrix)) / sum(conf_matrix)
+accuracy
+
+```
+```{r}
+
+casorf4 <- data.frame(sexo_per = factor(2, levels = levels(data$sexo_per)),
+                    fall_les = factor(2, levels = levels(data$fall_les)),
+                    tipo_eve = factor(1, levels = levels(data$tipo_eve)),
+                    depto_ocu = factor(2, levels = levels(data$depto_ocu)),
+                    tipo_veh = factor(1, levels = levels(data$tipo_veh)))
+
+predict(modelo_rf4, casorf4,type="prob")
+predict
+
+```
+```{r}
+
+data_rf5 <- datos_consolidados %>%
+  filter(fall_les %in% c(1, 2), sexo_per != 9, tipo_eve != 99, tipo_veh != 99, edad_per != 999)
+
+data_rf5$sexo_per <- factor(data_rf5$sexo_per)
+data_rf5$tipo_eve <- factor(data_rf5$tipo_eve)
+data_rf5$tipo_veh <- factor(data_rf5$tipo_veh)
+data_rf5$depto_ocu <- factor(data_rf5$depto_ocu)
+data_rf5$horario <- factor(data_rf5$horario)
+data_rf5$fall_les <- factor(data_rf5$fall_les)
+data_rf5$g_hora_5 <- factor(data_rf5$g_hora_5)
+
+# Entrenar RF
+set.seed(123)
+data <-  data_rf5[sample(1:nrow(data_rf5)), ]
+train_index <- sample(1:nrow(data), 0.7 * nrow(data))
+train_data <- data[train_index, ]
+test_data <- data[-train_index, ]
+modelo_rf5 <- randomForest(sexo_per ~ tipo_veh + depto_ocu + fall_les + g_hora_5 + tipo_eve ,
+                           data = train_data, ntree = 50, mtry = 3, importance = TRUE)
+
+
+modelo_rf5
+```
+```{r}
+plot(modelo_rf5)
+```
+```{r}
+
+predictions <- predict(modelo_rf5, newdata = test_data)
+conf_matrix <- table(test_data$fall_les, predictions)
+conf_matrix
+
+accuracy <- sum(diag(conf_matrix)) / sum(conf_matrix)
+accuracy
+
+```
+
+```{r}
+
+casorf5 <- data.frame(g_hora_5 = factor(2, levels = levels(data$g_hora_5)),
+                    fall_les = factor(2, levels = levels(data$fall_les)),
+                    tipo_eve = factor(1, levels = levels(data$tipo_eve)),
+                    depto_ocu = factor(2, levels = levels(data$depto_ocu)),
+                    tipo_veh = factor(1, levels = levels(data$tipo_veh)))
+
+predict(modelo_rf5, casorf5,type="prob")
+predict
+
+```
+```{r}
+
+data_rf6 <- datos_consolidados %>%
+  filter(fall_les %in% c(1, 2), sexo_per != 9, tipo_eve != 99, tipo_veh != 99, edad_per != 999)
+
+data_rf6$sexo_per <- factor(data_rf6$sexo_per)
+data_rf6$tipo_eve <- factor(data_rf6$tipo_eve)
+data_rf6$tipo_veh <- factor(data_rf6$tipo_veh)
+data_rf6$depto_ocu <- factor(data_rf6$depto_ocu)
+data_rf6$horario <- factor(data_rf6$horario)
+data_rf6$fall_les <- factor(data_rf6$fall_les)
+data_rf6$g_hora_5 <- factor(data_rf6$g_hora_5)
+data_rf6$mayor_menor <- factor(data_rf6$mayor_menor)
+
+# Entrenar RF
+set.seed(123)
+data <-  data_rf6[sample(1:nrow(data_rf6)), ]
+train_index <- sample(1:nrow(data), 0.7 * nrow(data))
+train_data <- data[train_index, ]
+test_data <- data[-train_index, ]
+modelo_rf6 <- randomForest(mayor_menor ~ tipo_veh + depto_ocu + fall_les + g_hora_5 + tipo_eve + sexo_per,
+                           data = train_data, ntree = 50, mtry = 3, importance = TRUE)
+
+
+modelo_rf6
+```
+```{r}
+plot(modelo_rf6)
+```
+```{r}
+
+predictions <- predict(modelo_rf6, newdata = test_data)
+conf_matrix <- table(test_data$fall_les, predictions)
+conf_matrix
+
+accuracy <- sum(diag(conf_matrix)) / sum(conf_matrix)
+accuracy
+
+```
+```{r}
+
+casorf6 <- data.frame(g_hora_5 = factor(2, levels = levels(data$g_hora_5)),
+                    fall_les = factor(2, levels = levels(data$fall_les)),
+                    tipo_eve = factor(1, levels = levels(data$tipo_eve)),
+                    depto_ocu = factor(2, levels = levels(data$depto_ocu)),
+                    sexo_per = factor(2, levels = levels(data$sexo_per)),
+                    tipo_veh = factor(1, levels = levels(data$tipo_veh)))
+
+predict(modelo_rf6, casorf6,type="prob")
+predict
+
+```
