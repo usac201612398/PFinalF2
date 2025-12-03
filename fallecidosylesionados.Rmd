@@ -642,8 +642,8 @@ escenarios <- data.frame(
   tipo_veh  = factor(c(4, 1, 3, 2, 5), levels = levels(data_bal$tipo_veh)),
   depto_ocu = factor(c(1, 6, 14, 18, 22), levels = levels(data_bal$depto_ocu)))
 
-pred_rf1 <- predict(modelo_rf1, escenarios, type = "prob")
-pred_rf1
+pred_rf1b <- predict(modelo_rf1b, escenarios, type = "prob")
+pred_rf1b
 
 
 ```
@@ -681,7 +681,7 @@ plot(modelo_rf2)
 ```{r}
 
 predictions <- predict(modelo_rf2, newdata = test_data)
-conf_matrix <- table(test_data$fall_les, predictions)
+conf_matrix <- table(test_data$tipo_eve, predictions)
 conf_matrix
 
 accuracy <- sum(diag(conf_matrix)) / sum(conf_matrix)
@@ -736,7 +736,7 @@ plot(modelo_rf2todos)
 ```{r}
 
 predictions <- predict(modelo_rf2todos, newdata = test_data)
-conf_matrix <- table(test_data$fall_les, predictions)
+conf_matrix <- table(test_data$tipo_eve, predictions)
 conf_matrix
 
 accuracy <- sum(diag(conf_matrix)) / sum(conf_matrix)
@@ -792,7 +792,7 @@ plot(modelo_rf3)
 ```{r}
 
 predictions <- predict(modelo_rf3, newdata = test_data)
-conf_matrix <- table(test_data$fall_les, predictions)
+conf_matrix <- table(test_data$tipo_veh, predictions)
 conf_matrix
 
 accuracy <- sum(diag(conf_matrix)) / sum(conf_matrix)
@@ -847,7 +847,7 @@ plot(modelo_rf4)
 ```{r}
 
 predictions <- predict(modelo_rf4, newdata = test_data)
-conf_matrix <- table(test_data$fall_les, predictions)
+conf_matrix <- table(test_data$horario, predictions)
 conf_matrix
 
 accuracy <- sum(diag(conf_matrix)) / sum(conf_matrix)
@@ -901,7 +901,7 @@ plot(modelo_rf5)
 ```{r}
 
 predictions <- predict(modelo_rf5, newdata = test_data)
-conf_matrix <- table(test_data$fall_les, predictions)
+conf_matrix <- table(test_data$sexo_per, predictions)
 conf_matrix
 
 accuracy <- sum(diag(conf_matrix)) / sum(conf_matrix)
@@ -958,7 +958,7 @@ plot(modelo_rf6)
 ```{r}
 
 predictions <- predict(modelo_rf6, newdata = test_data)
-conf_matrix <- table(test_data$fall_les, predictions)
+conf_matrix <- table(test_data$mayor_menor, predictions)
 conf_matrix
 
 accuracy <- sum(diag(conf_matrix)) / sum(conf_matrix)
@@ -980,12 +980,4 @@ predict(modelo_rf6, escenarios,type="prob")
 predict
 
 ```
-
-
-
-
-
-
-
-
 
