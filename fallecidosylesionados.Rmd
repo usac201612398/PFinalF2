@@ -355,6 +355,10 @@ escenarios
 predicciones <- predict(arbol2, escenarios, type = "prob")
 predicciones
 ```
+
+
+
+
 ## Modelo 3: Predcir tipo de vehiculo
 
 ### Se excluyen los casos en motocicletas porque estos son los que predominan y desbalancean el dataset.
@@ -466,9 +470,7 @@ result <- predict(arbol4, escenarios, type = "prob")
 result
 ```
 
-```{r}
-barplot(arbol4$variable.importance, main="Importancia de variables", col="steelblue")
-```
+
 
 ## Modelo 5: Predecir depto ocurrencia
 ### En esta predicción si se formo bien el arbol pero filtrando el interior del pais. Se excluyó Guatemala.
@@ -501,12 +503,12 @@ barplot(arbol5$variable.importance, main="Importancia de variables", col="steelb
 
 # 5 escenarios distintos
 escenarios <- data.frame(
-  sexo_per  = factor(c(2, 1, 2, 1, 2), levels = levels(data_bal$sexo_per)),   # Mujer/Hombre
-  mayor_menor  = factor(c(1, 2, 2, 1, 1), levels = levels(data_bal$mayor_menor)),   # Mayor,Menor
-  tipo_eve  = factor(c(2, 5, 3, 1, 6), levels = levels(data_bal$tipo_eve)), # Choque, Atropello, Vuelco, Colisión, Derrape
-  tipo_veh  = factor(c(4, 1, 3, 2, 5), levels = levels(data_bal$tipo_veh)),   # Motocicleta, Automóvil, Pick up, Camioneta sport, Camión
+  sexo_per  = factor(c(2, 1, 2, 1, 2), levels = levels(data_arbol5$sexo_per)),   # Mujer/Hombre
+  mayor_menor  = factor(c(1, 2, 2, 1, 1), levels = levels(data_arbol5$mayor_menor)),   # Mayor,Menor
+  tipo_eve  = factor(c(2, 5, 3, 1, 6), levels = levels(data_arbol5$tipo_eve)), # Choque, Atropello, Vuelco, Colisión, Derrape
+  tipo_veh  = factor(c(4, 1, 3, 2, 5), levels = levels(data_arbol5$tipo_veh)),   # Motocicleta, Automóvil, Pick up, Camioneta sport, Camión
   
-  fall_les = factor(c(1, 1, 2, 2, 2), levels = levels(data_bal$depto_ocu)) # Fallecido, Lesionado
+  fall_les = factor(c(1, 1, 2, 2, 2), levels = levels(data_arbol5$depto_ocu)) # Fallecido, Lesionado
 )
 
 # Ver el dataframe
@@ -517,6 +519,7 @@ escenarios
 # Predicción con probabilidades
 result <- predict(arbol5, escenarios, type = "prob")
 result
+
 ```
 
 ### Se intentó analizar el mes de ocurrencia pero no se obtuvo arbol debido al desbalance pero lo interesante es que en en el mes de diciembre hay mas accidentes de transito y luego le sigue diciembre. Además, en junio es donde menos reportes de incidencias hubo.
@@ -978,6 +981,21 @@ escenarios <- data.frame(
 )
 predict(modelo_rf6, escenarios,type="prob")
 predict
+
+```
+
+
+
+```{r}
+
+install.packages("writexl")   # Ejecuta solo una vez
+library(writexl)
+
+# Si quieres preservar etiquetas de factores:
+df_export_xlsx <- datos_consolidados %>% dplyr::mutate(dplyr::across(where(is.factor), as.character))
+
+# Exportar a Excel
+write_xlsx(df_export_xlsx, path = "datos_consolidados.xlsx")
 
 ```
 
